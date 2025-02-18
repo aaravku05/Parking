@@ -11,7 +11,8 @@
             background: linear-gradient(135deg, #4B79A1, #283E51);
             color: white;
             text-align: center;
-            padding: 20px;
+            padding: 15px;
+            margin: 0;
         }
 
         /* Card Container */
@@ -20,33 +21,34 @@
             backdrop-filter: blur(10px);
             border-radius: 15px;
             padding: 20px;
-            width: 80%;
-            max-width: 400px;
+            max-width: 100%;
+            width: 350px;
             margin: auto;
             box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
         }
 
         /* Heading */
         h2 {
-            font-size: 24px;
+            font-size: 22px;
             margin-bottom: 15px;
         }
 
         /* Parking Slot Display */
         #slots {
-            font-size: 18px;
+            font-size: 16px;
             margin-bottom: 15px;
         }
 
         /* Input Field */
         input {
             width: 90%;
-            padding: 10px;
+            padding: 12px;
             border: none;
             border-radius: 5px;
-            margin-bottom: 10px;
+            margin-bottom: 12px;
             font-size: 16px;
             text-align: center;
+            background-color: #ffffff;
         }
 
         /* Button Styling */
@@ -57,7 +59,7 @@
             border-radius: 5px;
             background: linear-gradient(135deg, #00C9FF, #92FE9D);
             color: black;
-            font-size: 18px;
+            font-size: 16px;
             cursor: pointer;
             transition: 0.3s ease-in-out;
         }
@@ -87,6 +89,27 @@
             background: rgba(255, 0, 0, 0.2);
             color: #FF0000;
             border: 1px solid #FF0000;
+        }
+
+        /* Responsive Layout */
+        @media screen and (max-width: 600px) {
+            h2 {
+                font-size: 20px;
+            }
+
+            input {
+                font-size: 14px;
+                padding: 10px;
+            }
+
+            button {
+                font-size: 14px;
+                padding: 10px;
+            }
+
+            #slots {
+                font-size: 14px;
+            }
         }
     </style>
 </head>
