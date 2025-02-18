@@ -1,171 +1,170 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Parking Reservation System</title>
+    <title>Smart Parking</title>
     <style>
+        /* Background Gradient */
         body {
             font-family: 'Arial', sans-serif;
-            background: linear-gradient(135deg, #f8b8d1, #f2f2f2);
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
+            background: linear-gradient(135deg, #4B79A1, #283E51);
+            color: white;
+            text-align: center;
+            padding: 20px;
         }
 
+        /* Card Container */
         .container {
-            background-color: white;
-            border-radius: 10px;
-            padding: 30px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            width: 400px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            width: 80%;
+            max-width: 400px;
+            margin: auto;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Heading */
+        h2 {
+            font-size: 24px;
+            margin-bottom: 15px;
+        }
+
+        /* Parking Slot Display */
+        #slots {
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+
+        /* Input Field */
+        input {
+            width: 90%;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            font-size: 16px;
             text-align: center;
         }
 
-        h2 {
-            font-size: 28px;
-            color: #333;
-            margin-bottom: 20px;
-        }
-
-        .slot-info {
-            font-size: 22px;
-            color: #2f9e44;
-            margin-bottom: 20px;
-        }
-
-        input, button {
-            width: 100%;
-            padding: 15px;
-            margin: 10px 0;
-            border: 2px solid #ccc;
-            border-radius: 5px;
-            font-size: 16px;
-            box-sizing: border-box;
-        }
-
-        input:focus, button:focus {
-            outline: none;
-            border-color: #6c8ebf;
-        }
-
+        /* Button Styling */
         button {
-            background-color: #6c8ebf;
-            color: white;
-            cursor: pointer;
-            font-size: 18px;
+            width: 100%;
+            padding: 12px;
             border: none;
+            border-radius: 5px;
+            background: linear-gradient(135deg, #00C9FF, #92FE9D);
+            color: black;
+            font-size: 18px;
+            cursor: pointer;
+            transition: 0.3s ease-in-out;
         }
 
         button:hover {
-            background-color: #55739a;
+            background: linear-gradient(135deg, #92FE9D, #00C9FF);
+            transform: scale(1.05);
         }
 
-        button.cancel {
-            background-color: #e74c3c;
-        }
-
-        button.cancel:hover {
-            background-color: #c0392b;
-        }
-
-        #statusMessage {
-            margin-top: 20px;
-            font-size: 18px;
+        /* Confirmation & Error Messages */
+        .message {
+            display: none;
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 5px;
             font-weight: bold;
+            transition: opacity 1s ease-in-out;
         }
 
-        .footer {
-            font-size: 14px;
-            color: #888;
-            margin-top: 30px;
+        #confirmation {
+            background: rgba(0, 255, 0, 0.2);
+            color: #00FF00;
+            border: 1px solid #00FF00;
         }
 
+        #error {
+            background: rgba(255, 0, 0, 0.2);
+            color: #FF0000;
+            border: 1px solid #FF0000;
+        }
     </style>
 </head>
 <body>
 
     <div class="container">
-        <h2>Parking Reservation System</h2>
-        <p class="slot-info">Slots Available: <span id="slotsLeft">4</span></p>
+        <h2>🚗 Smart Parking System</h2>
+        <p id="slots">Loading...</p>
 
-        <input type="text" id="rfid" placeholder="Enter RFID UID (e.g., 3A B5 7F 91)">
-        <button onclick="reserveSlot()">Reserve Slot</button>
-        <button class="cancel" onclick="cancelReservation()">Cancel Reservation</button>
+        <h2>Reserve a Slot</h2>
+        <input type="text" id="uid" placeholder="Enter UID">
+        <button onclick="reserveSlot()">Reserve</button>
 
-        <p id="statusMessage"></p>
-        
-        <div class="footer">Powered by SCTS Wagholi </div>
+        <p id="confirmation" class="message">✅ Reservation Successful!</p>
+        <p id="error" class="message">❌ Error: Reservation Failed!</p>
     </div>
 
     <script>
-        // Update available slots
-        function updateSlots() {
-            fetch('/get_slots')
+        function updateStatus() {
+            fetch('/status')
                 .then(response => response.json())
                 .then(data => {
-                    document.getElementById("slotsLeft").innerText = data.available_slots;
+                    document.getElementById("slots").innerText = "Slots: " + JSON.stringify(data.slots);
                 });
         }
 
-        // Reserve a slot by sending the UID to the server
         function reserveSlot() {
-            let uid = document.getElementById("rfid").value.trim();
-            if (uid === "") {
-                alert("Please enter an RFID UID!");
+            let uid = document.getElementById("uid").value;
+            if (!uid) {
+                showError("❌ Error: Please enter a UID!");
                 return;
             }
 
-            fetch('/reserve_slot', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ 'uid': uid })
+            fetch("/reserve", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({uid: uid})
             })
             .then(response => response.json())
             .then(data => {
-                document.getElementById("statusMessage").innerText = data.message;
-                updateSlots(); // Refresh available slots
+                if (data.message === "Slot Reserved") {
+                    showConfirmation("✅ Reservation Successful!");
+                    updateStatus();
+                } else {
+                    showError("❌ Error: Reservation Failed!");
+                }
             })
-            .catch(error => {
-                console.error('Error:', error);
-                document.getElementById("statusMessage").innerText = "Error reserving slot!";
+            .catch(() => {
+                showError("❌ Error: Server Connection Failed!");
             });
         }
 
-        // Cancel reservation by sending the UID to the server
-        function cancelReservation() {
-            let uid = document.getElementById("rfid").value.trim();
-            if (uid === "") {
-                alert("Please enter an RFID UID!");
-                return;
-            }
+        function showConfirmation(msg) {
+            let confirmation = document.getElementById("confirmation");
+            confirmation.innerText = msg;
+            confirmation.style.display = "block";
+            confirmation.style.opacity = "1";
 
-            fetch('/cancel_reservation', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ 'uid': uid })
-            })
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById("statusMessage").innerText = data.message;
-                updateSlots(); // Refresh available slots
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                document.getElementById("statusMessage").innerText = "Error canceling reservation!";
-            });
+            setTimeout(() => {
+                confirmation.style.opacity = "0";
+                setTimeout(() => { confirmation.style.display = "none"; }, 1000);
+            }, 3000);
         }
 
-        // Initial slot update
-        updateSlots();
+        function showError(msg) {
+            let error = document.getElementById("error");
+            error.innerText = msg;
+            error.style.display = "block";
+            error.style.opacity = "1";
+
+            setTimeout(() => {
+                error.style.opacity = "0";
+                setTimeout(() => { error.style.display = "none"; }, 1000);
+            }, 4000);
+        }
+
+        // Auto-update slot status every 2 seconds
+        setInterval(updateStatus, 2000);
     </script>
 
 </body>
