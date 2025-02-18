@@ -1,0 +1,1 @@
+sudo apt update && sudo apt install -y python3-pip python3-pigpio python3-rpi.gpio python3-smbus && pip3 install flask mfrc522 RPLCD
