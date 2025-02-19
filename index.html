@@ -5,190 +5,77 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SlotSync</title>
     <style>
-        /* Background Gradient */
         body {
-            font-family: 'Arial', sans-serif;
+            font-family: Arial, sans-serif;
             background: linear-gradient(135deg, #4B79A1, #283E51);
             color: white;
             text-align: center;
             padding: 15px;
             margin: 0;
         }
-
-        /* Card Container */
         .container {
             background: rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(10px);
             border-radius: 15px;
             padding: 20px;
-            max-width: 100%;
-            width: 350px;
+            max-width: 350px;
             margin: auto;
-            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
         }
-
-        /* Heading */
-        h2 {
-            font-size: 22px;
-            margin-bottom: 15px;
-        }
-
-        /* Parking Slot Display */
-        #slots {
-            font-size: 16px;
-            margin-bottom: 15px;
-        }
-
-        /* Input Field */
-        input {
+        input, button {
             width: 90%;
             padding: 12px;
             border: none;
             border-radius: 5px;
             margin-bottom: 12px;
             font-size: 16px;
-            text-align: center;
-            background-color: #ffffff;
         }
-
-        /* Button Styling */
         button {
-            width: 100%;
-            padding: 12px;
-            border: none;
-            border-radius: 5px;
             background: linear-gradient(135deg, #00C9FF, #92FE9D);
-            color: black;
-            font-size: 16px;
             cursor: pointer;
             transition: 0.3s ease-in-out;
         }
-
         button:hover {
-            background: linear-gradient(135deg, #92FE9D, #00C9FF);
             transform: scale(1.05);
         }
-
-        /* Confirmation & Error Messages */
         .message {
             display: none;
             margin-top: 15px;
             padding: 10px;
             border-radius: 5px;
             font-weight: bold;
-            transition: opacity 1s ease-in-out;
         }
-
-        #confirmation {
-            background: rgba(0, 255, 0, 0.2);
-            color: #00FF00;
-            border: 1px solid #00FF00;
-        }
-
-        #error {
-            background: rgba(255, 0, 0, 0.2);
-            color: #FF0000;
-            border: 1px solid #FF0000;
-        }
-
-        /* Responsive Layout */
-        @media screen and (max-width: 600px) {
-            h2 {
-                font-size: 20px;
-            }
-
-            input {
-                font-size: 14px;
-                padding: 10px;
-            }
-
-            button {
-                font-size: 14px;
-                padding: 10px;
-            }
-
-            #slots {
-                font-size: 14px;
-            }
-        }
+        #confirmation { background: rgba(0, 255, 0, 0.2); color: #00FF00; }
+        #error { background: rgba(255, 0, 0, 0.2); color: #FF0000; }
     </style>
 </head>
 <body>
-
     <div class="container">
-        <h2>🚗 SlotSync </h2>
+        <h2>🚗 SlotSync</h2>
         <p id="slots">Loading...</p>
-
         <h2>Reserve a Slot</h2>
         <input type="text" id="uid" placeholder="Enter UID">
         <button onclick="reserveSlot()">Reserve</button>
-
         <p id="confirmation" class="message">✅ Reservation Successful!</p>
         <p id="error" class="message">❌ Error: Reservation Failed!</p>
     </div>
-
     <script>
         function updateStatus() {
-            fetch('/status')
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById("slots").innerText = "Slots: " + JSON.stringify(data.slots);
-                });
-        }
-
-        function reserveSlot() {
-            let uid = document.getElementById("uid").value;
-            if (!uid) {
-                showError("❌ Error: Please enter a UID!");
-                return;
-            }
-
-            fetch("/reserve", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({uid: uid})
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.message === "Slot Reserved") {
-                    showConfirmation("✅ Reservation Successful!");
-                    updateStatus();
-                } else {
-                    showError("❌ Error: Reservation Failed!");
-                }
-            })
-            .catch(() => {
-                showError("❌ Error: Server Connection Failed!");
+            fetch('/status').then(res => res.json()).then(data => {
+                document.getElementById("slots").innerText = "Slots: " + JSON.stringify(data.slots);
             });
         }
-
-        function showConfirmation(msg) {
-            let confirmation = document.getElementById("confirmation");
-            confirmation.innerText = msg;
-            confirmation.style.display = "block";
-            confirmation.style.opacity = "1";
-
-            setTimeout(() => {
-                confirmation.style.opacity = "0";
-                setTimeout(() => { confirmation.style.display = "none"; }, 1000);
-            }, 3000);
+        function reserveSlot() {
+            let uid = document.getElementById("uid").value;
+            fetch("/reserve", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ uid: uid })
+            }).then(res => res.json()).then(data => {
+                alert(data.message);
+                updateStatus();
+            });
         }
-
-        function showError(msg) {
-            let error = document.getElementById("error");
-            error.innerText = msg;
-            error.style.display = "block";
-            error.style.opacity = "1";
-
-            setTimeout(() => {
-                error.style.opacity = "0";
-                setTimeout(() => { error.style.display = "none"; }, 1000);
-            }, 4000);
-        }
-
-        // Auto-update slot status every 2 seconds
         setInterval(updateStatus, 2000);
     </script>
-
 </body>
 </html>
