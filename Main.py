@@ -35,9 +35,9 @@ BTN_REMOVE = 6
 GPIO.setup(BTN_ADD, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 GPIO.setup(BTN_REMOVE, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-# Parking Slots (Initially empty)
+# Parking Slots (Initially all available)
 PARKING_SLOTS = 4
-slots = [None] * PARKING_SLOTS
+available_slots = PARKING_SLOTS
 registered_uids = {}
 
 # Load registered UIDs from file
@@ -101,7 +101,7 @@ def remove_rfid():
 
 def detect_entry():
     """ Detect vehicle entry and authenticate via RFID """
-    global slots
+    global available_slots
     while True:
         if GPIO.input(IR_ENTRY) == 0:
             print("Vehicle detected at entry...")
@@ -110,8 +110,8 @@ def detect_entry():
             uid = str(uid)
 
             if uid in registered_uids:
-                if None in slots:
-                    slots[slots.index(None)] = uid
+                if available_slots > 0:
+                    available_slots -= 1
                     move_servo(90)
                     time.sleep(3)
                     move_servo(0)
@@ -127,19 +127,17 @@ def detect_entry():
 
 def detect_exit():
     """ Detect vehicle exit and free slot """
-    global slots
+    global available_slots
     while True:
         if GPIO.input(IR_EXIT) == 0:
             print("Vehicle detected at exit...")
-            for i in range(len(slots)):
-                if slots[i] is not None:
-                    slots[i] = None
-                    move_servo(90)
-                    time.sleep(3)
-                    move_servo(0)
-                    update_lcd("Exit Granted")
-                    print("Vehicle exited.")
-                    break
+            if available_slots < PARKING_SLOTS:
+                available_slots += 1
+                move_servo(90)
+                time.sleep(3)
+                move_servo(0)
+                update_lcd("Exit Granted")
+                print("Vehicle exited.")
             time.sleep(1)
 
 
@@ -152,20 +150,21 @@ def home():
 
 @app.route("/status", methods=["GET"])
 def status():
-    return jsonify({"slots": slots})
+    """ Return the number of available slots """
+    return jsonify({"available_slots": available_slots})
 
 @app.route("/reserve", methods=["POST"])
 def reserve():
     """ Reserve slot only if UID is registered """
-    global slots
+    global available_slots
     data = request.get_json()
     uid = data.get("uid")
 
     if uid not in registered_uids:
         return jsonify({"message": "Access Denied: Invalid UID"}), 403
 
-    if None in slots:
-        slots[slots.index(None)] = uid
+    if available_slots > 0:
+        available_slots -= 1
         return jsonify({"message": "Slot Reserved"})
     else:
         return jsonify({"message": "Parking Full"}), 400
