@@ -32,10 +32,6 @@
         button {
             background: linear-gradient(135deg, #00C9FF, #92FE9D);
             cursor: pointer;
-            transition: 0.3s ease-in-out;
-        }
-        button:hover {
-            transform: scale(1.05);
         }
         .message {
             display: none;
@@ -44,8 +40,6 @@
             border-radius: 5px;
             font-weight: bold;
         }
-        #confirmation { background: rgba(0, 255, 0, 0.2); color: #00FF00; }
-        #error { background: rgba(255, 0, 0, 0.2); color: #FF0000; }
     </style>
 </head>
 <body>
@@ -55,13 +49,11 @@
         <h2>Reserve a Slot</h2>
         <input type="text" id="uid" placeholder="Enter UID">
         <button onclick="reserveSlot()">Reserve</button>
-        <p id="confirmation" class="message">✅ Reservation Successful!</p>
-        <p id="error" class="message">❌ Error: Reservation Failed!</p>
     </div>
     <script>
         function updateStatus() {
             fetch('/status').then(res => res.json()).then(data => {
-                document.getElementById("slots").innerText = "Slots: " + JSON.stringify(data.slots);
+                document.getElementById("slots").innerText = "Available Slots: " + data.available_slots;
             });
         }
         function reserveSlot() {
