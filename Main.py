@@ -4,7 +4,7 @@ import json
 import threading
 from flask import Flask, render_template, request, jsonify
 from mfrc522 import SimpleMFRC522
-import smbus2
+import smbus
 import pigpio
 import os
 
@@ -22,43 +22,9 @@ SERVO_PIN = 22
 pi = pigpio.pi()
 pi.set_mode(SERVO_PIN, pigpio.OUTPUT)
 
-# I2C LCD Setup
-I2C_ADDR = 0x27  # Change if necessary
-bus = smbus2.SMBus(1)
-LCD_BACKLIGHT = 0x08  # LCD backlight on
-ENABLE = 0b00000100
-
-def lcd_send_byte(bits, mode):
-    high = mode | (bits & 0xF0) | LCD_BACKLIGHT
-    low = mode | ((bits << 4) & 0xF0) | LCD_BACKLIGHT
-    bus.write_byte(I2C_ADDR, high)
-    lcd_toggle_enable(high)
-    bus.write_byte(I2C_ADDR, low)
-    lcd_toggle_enable(low)
-
-def lcd_toggle_enable(bits):
-    time.sleep(0.0005)
-    bus.write_byte(I2C_ADDR, (bits | ENABLE))
-    time.sleep(0.0005)
-    bus.write_byte(I2C_ADDR, (bits & ~ENABLE))
-    time.sleep(0.0005)
-
-def lcd_init():
-    lcd_send_byte(0x33, 0)
-    lcd_send_byte(0x32, 0)
-    lcd_send_byte(0x28, 0)
-    lcd_send_byte(0x0C, 0)
-    lcd_send_byte(0x06, 0)
-    lcd_send_byte(0x01, 0)
-    time.sleep(0.2)
-
-def lcd_display_string(message, line):
-    lines = [0x80, 0xC0]
-    lcd_send_byte(lines[line], 0)
-    for char in message.ljust(16):
-        lcd_send_byte(ord(char), 1)
-
-lcd_init()
+# LCD I2C Setup (Replace with actual LCD code)
+I2C_ADDR = 0x27
+bus = smbus.SMBus(1)
 
 # RFID Setup
 reader = SimpleMFRC522()
@@ -69,15 +35,22 @@ BTN_REMOVE = 6
 GPIO.setup(BTN_ADD, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 GPIO.setup(BTN_REMOVE, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-# Parking Slots (Initially empty)
+# Parking Slots & Registered UIDs
 PARKING_SLOTS = 4
-slots_available = PARKING_SLOTS
+slots = [None] * PARKING_SLOTS
 registered_uids = {}
+reserved_uids = set()
 
 # Load registered UIDs from file
 if os.path.exists("rfid_data.json"):
     with open("rfid_data.json", "r") as file:
         registered_uids = json.load(file)
+
+# Load reserved UIDs from file
+if os.path.exists("reserved_data.json"):
+    with open("reserved_data.json", "r") as file:
+        reserved_uids = set(json.load(file))
+
 
 def move_servo(angle):
     """ Move servo (0° for closed, 90° for open) """
@@ -86,17 +59,18 @@ def move_servo(angle):
     time.sleep(1)
     pi.set_servo_pulsewidth(SERVO_PIN, 0)
 
-def update_lcd():
-    """ Display available slots on LCD """
-    lcd_display_string(f"Slots Available: {slots_available}", 0)
-    lcd_display_string("", 1)
+
+def update_lcd(message):
+    """ Display messages on LCD """
+    print(f"LCD: {message}")  # Replace with actual LCD I2C commands
+
 
 def add_rfid():
     """ Add RFID card when button is pressed """
-    global registered_uids
     while True:
         if GPIO.input(BTN_ADD) == GPIO.LOW:
-            lcd_display_string("Scan New Card", 0)
+            print("Place RFID card to register...")
+            update_lcd("Scan New Card")
             uid, _ = reader.read()
             uid = str(uid)
 
@@ -104,63 +78,87 @@ def add_rfid():
                 registered_uids[uid] = True
                 with open("rfid_data.json", "w") as file:
                     json.dump(registered_uids, file)
-                lcd_display_string(f"Added: {uid}", 0)
+                print(f"RFID {uid} added!")
+                update_lcd(f"Added: {uid}")
             else:
-                lcd_display_string("Card Exists", 0)
+                update_lcd("Card Already Exists")
             time.sleep(2)
-            update_lcd()
+
 
 def remove_rfid():
     """ Remove RFID card when button is pressed """
-    global registered_uids
     while True:
         if GPIO.input(BTN_REMOVE) == GPIO.LOW:
-            lcd_display_string("Scan Card to Remove", 0)
+            print("Place RFID card to remove...")
+            update_lcd("Scan Card to Remove")
             uid, _ = reader.read()
             uid = str(uid)
 
             if uid in registered_uids:
                 del registered_uids[uid]
+                reserved_uids.discard(uid)
                 with open("rfid_data.json", "w") as file:
                     json.dump(registered_uids, file)
-                lcd_display_string(f"Removed: {uid}", 0)
+                with open("reserved_data.json", "w") as file:
+                    json.dump(list(reserved_uids), file)
+                print(f"RFID {uid} removed!")
+                update_lcd(f"Removed: {uid}")
             else:
-                lcd_display_string("Card Not Found", 0)
+                update_lcd("Card Not Found")
             time.sleep(2)
-            update_lcd()
+
 
 def detect_entry():
     """ Detect vehicle entry and authenticate via RFID """
-    global slots_available
+    global slots
     while True:
-        if GPIO.input(IR_ENTRY) == 0 and slots_available > 0:
-            lcd_display_string("Scan RFID Card", 0)
+        if GPIO.input(IR_ENTRY) == 0:
+            print("Vehicle detected at entry...")
+            update_lcd("Scanning RFID")
             uid, _ = reader.read()
             uid = str(uid)
 
             if uid in registered_uids:
-                slots_available -= 1
-                move_servo(90)
-                time.sleep(3)
-                move_servo(0)
-                lcd_display_string("Entry Granted", 0)
+                # Count reserved slots already occupied
+                reserved_count = sum(1 for slot in slots if slot in reserved_uids)
+
+                if uid in reserved_uids or reserved_count < len(reserved_uids):
+                    if None in slots:
+                        slots[slots.index(None)] = uid  # Assign slot
+                        move_servo(90)
+                        time.sleep(3)
+                        move_servo(0)
+                        update_lcd("Entry Granted")
+                        print(f"Entry granted: {uid}")
+                    else:
+                        update_lcd("Parking Full!")
+                        print("Parking Full!")
+                else:
+                    update_lcd("Walk-in Denied")
+                    print("Walk-in Denied!")
             else:
-                lcd_display_string("Access Denied", 0)
-            time.sleep(2)
-            update_lcd()
+                update_lcd("Access Denied")
+                print("Access Denied!")
+            time.sleep(1)
+
 
 def detect_exit():
     """ Detect vehicle exit and free slot """
-    global slots_available
+    global slots
     while True:
         if GPIO.input(IR_EXIT) == 0:
-            slots_available += 1
-            move_servo(90)
-            time.sleep(3)
-            move_servo(0)
-            lcd_display_string("Exit Granted", 0)
-            time.sleep(2)
-            update_lcd()
+            print("Vehicle detected at exit...")
+            for i in range(len(slots)):
+                if slots[i] is not None:
+                    slots[i] = None
+                    move_servo(90)
+                    time.sleep(3)
+                    move_servo(0)
+                    update_lcd("Exit Granted")
+                    print("Vehicle exited.")
+                    break
+            time.sleep(1)
+
 
 # Flask Web App
 app = Flask(__name__)
@@ -171,23 +169,25 @@ def home():
 
 @app.route("/status", methods=["GET"])
 def status():
-    return jsonify({"available_slots": slots_available})
+    available_slots = sum(1 for slot in slots if slot is None)
+    return jsonify({"available_slots": available_slots})
 
 @app.route("/reserve", methods=["POST"])
 def reserve():
     """ Reserve slot only if UID is registered """
-    global slots_available
+    global slots
     data = request.get_json()
     uid = data.get("uid")
 
     if uid not in registered_uids:
         return jsonify({"message": "Access Denied: Invalid UID"}), 403
 
-    if slots_available > 0:
-        slots_available -= 1
-        return jsonify({"message": "Slot Reserved"})
-    else:
-        return jsonify({"message": "Parking Full"}), 400
+    reserved_uids.add(uid)
+    with open("reserved_data.json", "w") as file:
+        json.dump(list(reserved_uids), file)
+
+    return jsonify({"message": "Reservation Successful"})
+
 
 if __name__ == "__main__":
     threading.Thread(target=add_rfid, daemon=True).start()
@@ -195,5 +195,4 @@ if __name__ == "__main__":
     threading.Thread(target=detect_entry, daemon=True).start()
     threading.Thread(target=detect_exit, daemon=True).start()
 
-    update_lcd()
     app.run(host="0.0.0.0", port=5000, debug=True)
