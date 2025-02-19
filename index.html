@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SlotSync</title>
+    <title>SlotSync - Smart Parking</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             background: linear-gradient(135deg, #4B79A1, #283E51);
             color: white;
             text-align: center;
-            padding: 15px;
+            padding: 20px;
             margin: 0;
         }
         .container {
@@ -18,7 +18,7 @@
             backdrop-filter: blur(10px);
             border-radius: 15px;
             padding: 20px;
-            max-width: 350px;
+            max-width: 400px;
             margin: auto;
         }
         input, button {
@@ -32,6 +32,10 @@
         button {
             background: linear-gradient(135deg, #00C9FF, #92FE9D);
             cursor: pointer;
+            transition: 0.3s;
+        }
+        button:hover {
+            transform: scale(1.05);
         }
         .message {
             display: none;
@@ -40,34 +44,79 @@
             border-radius: 5px;
             font-weight: bold;
         }
+        #confirmation { background: rgba(0, 255, 0, 0.2); color: #00FF00; }
+        #error { background: rgba(255, 0, 0, 0.2); color: #FF0000; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>🚗 SlotSync</h2>
-        <p id="slots">Loading...</p>
-        <h2>Reserve a Slot</h2>
-        <input type="text" id="uid" placeholder="Enter UID">
+        <h2>🚗 SlotSync - Smart Parking</h2>
+        <p><b>Available Slots: <span id="available_slots">Loading...</span></b></p>
+
+        <h3>Reserve a Slot</h3>
+        <input type="text" id="uid" placeholder="Enter Your UID">
         <button onclick="reserveSlot()">Reserve</button>
+
+        <p id="confirmation" class="message">✅ Slot Reserved Successfully!</p>
+        <p id="error" class="message">❌ Error: Reservation Failed!</p>
     </div>
+
     <script>
         function updateStatus() {
-            fetch('/status').then(res => res.json()).then(data => {
-                document.getElementById("slots").innerText = "Available Slots: " + data.available_slots;
-            });
+            fetch('/status')
+                .then(response => response.json())
+                .then(data => {
+                    let available = data.slots.filter(slot => slot === null).length;
+                    document.getElementById("available_slots").innerText = available;
+                })
+                .catch(() => {
+                    document.getElementById("available_slots").innerText = "Error Fetching Data";
+                });
         }
+
         function reserveSlot() {
             let uid = document.getElementById("uid").value;
+            if (!uid) {
+                showError("UID cannot be empty!");
+                return;
+            }
+
             fetch("/reserve", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ uid: uid })
-            }).then(res => res.json()).then(data => {
-                alert(data.message);
-                updateStatus();
-            });
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.message.includes("Denied") || data.message.includes("Full")) {
+                    showError(data.message);
+                } else {
+                    showSuccess(data.message);
+                    updateStatus();
+                }
+            })
+            .catch(() => showError("Server error. Try again later!"));
         }
-        setInterval(updateStatus, 2000);
+
+        function showSuccess(msg) {
+            let confirmBox = document.getElementById("confirmation");
+            let errorBox = document.getElementById("error");
+            confirmBox.innerText = msg;
+            confirmBox.style.display = "block";
+            errorBox.style.display = "none";
+            setTimeout(() => confirmBox.style.display = "none", 3000);
+        }
+
+        function showError(msg) {
+            let errorBox = document.getElementById("error");
+            let confirmBox = document.getElementById("confirmation");
+            errorBox.innerText = msg;
+            errorBox.style.display = "block";
+            confirmBox.style.display = "none";
+            setTimeout(() => errorBox.style.display = "none", 3000);
+        }
+
+        setInterval(updateStatus, 3000);
     </script>
 </body>
 </html>
