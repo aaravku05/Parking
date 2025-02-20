@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SlotSync - Smart Parking</title>
-    <link rel="icon" type="image/png" href="https://i.imgur.com/bl5pWck.jpeg"> 
-
+    <link rel="icon" href="https://i.imgur.com/bl5pWck.jpeg" type="image/jpeg">
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -22,20 +21,13 @@
             padding: 20px;
             max-width: 400px;
             margin: auto;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
         }
         .logo {
-            width: 100px;
-            height: auto;
+            width: 80px;
+            height: 80px;
             margin-bottom: 10px;
-        }
-        h2 {
-            margin-top: 5px;
-            font-size: 22px;
-        }
-        p {
-            font-size: 18px;
-            font-weight: bold;
+            border-radius: 50%;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
         }
         input, button {
             width: 90%;
@@ -68,8 +60,7 @@
     <div class="container">
         <img src="https://i.imgur.com/bl5pWck.jpeg" alt="SlotSync Logo" class="logo">
         <h2>🚗 SlotSync - Smart Parking</h2>
-
-        <p>Available Slots: <span id="available_slots">Loading...</span></p>
+        <p><b>Available Slots: <span id="available_slots">Loading...</span></b></p>
 
         <h3>Reserve a Slot</h3>
         <input type="text" id="uid" placeholder="Enter Your UID">
@@ -81,15 +72,19 @@
 
     <script>
         function updateStatus() {
-            fetch('/status')
-                .then(response => response.json())
-                .then(data => {
-                    let available = data.slots.filter(slot => slot === null).length;
-                    document.getElementById("available_slots").innerText = available;
-                })
-                .catch(() => {
-                    document.getElementById("available_slots").innerText = "Error Fetching Data";
-                });
+            fetch("/status")
+            .then(response => response.json())
+            .then(data => {
+                if (data && data.available_slots !== undefined) {
+                    document.getElementById("available_slots").innerText = data.available_slots;
+                } else {
+                    throw new Error("Invalid response format");
+                }
+            })
+            .catch(error => {
+                console.error("Error fetching data:", error);
+                document.getElementById("available_slots").innerText = "Error Fetching Data";
+            });
         }
 
         function reserveSlot() {
@@ -135,6 +130,7 @@
         }
 
         setInterval(updateStatus, 3000);
+        updateStatus(); // Initial call to fetch data on page load
     </script>
 </body>
 </html>
