@@ -37,7 +37,8 @@ GPIO.setup(BTN_REMOVE, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
 # Parking Slots & Registered UIDs
 PARKING_SLOTS = 4
-slots = [None] * PARKING_SLOTS
+# 'slots' is a list where each element is either None or the UID occupying that slot.
+slots = [None] * PARKING_SLOTS  
 registered_uids = {}
 reserved_uids = set()
 
@@ -119,23 +120,38 @@ def detect_entry():
             uid = str(uid)
 
             if uid in registered_uids:
-                # Count reserved slots already occupied
-                reserved_count = sum(1 for slot in slots if slot in reserved_uids)
-
-                if uid in reserved_uids or reserved_count < len(reserved_uids):
-                    if None in slots:
-                        slots[slots.index(None)] = uid  # Assign slot
+                if uid in reserved_uids:
+                    # If reserved, the slot should already be taken.
+                    if uid in slots:
                         move_servo(90)
                         time.sleep(3)
                         move_servo(0)
                         update_lcd("Entry Granted")
-                        print(f"Entry granted: {uid}")
+                        print(f"Entry granted (reserved): {uid}")
+                    else:
+                        # Fallback: assign a slot if, for some reason, it's not marked.
+                        if None in slots:
+                            slots[slots.index(None)] = uid
+                            move_servo(90)
+                            time.sleep(3)
+                            move_servo(0)
+                            update_lcd("Entry Granted")
+                            print(f"Entry granted (fallback reserved): {uid}")
+                        else:
+                            update_lcd("Parking Full!")
+                            print("Parking Full!")
+                else:
+                    # Walk-in users: assign a slot at entry time.
+                    if None in slots:
+                        slots[slots.index(None)] = uid
+                        move_servo(90)
+                        time.sleep(3)
+                        move_servo(0)
+                        update_lcd("Entry Granted")
+                        print(f"Entry granted (walk-in): {uid}")
                     else:
                         update_lcd("Parking Full!")
                         print("Parking Full!")
-                else:
-                    update_lcd("Walk-in Denied")
-                    print("Walk-in Denied!")
             else:
                 update_lcd("Access Denied")
                 print("Access Denied!")
@@ -148,6 +164,7 @@ def detect_exit():
     while True:
         if GPIO.input(IR_EXIT) == 0:
             print("Vehicle detected at exit...")
+            # Free the first occupied slot encountered.
             for i in range(len(slots)):
                 if slots[i] is not None:
                     slots[i] = None
@@ -174,7 +191,9 @@ def status():
 
 @app.route("/reserve", methods=["POST"])
 def reserve():
-    """ Reserve slot only if UID is registered """
+    """ Reserve a slot immediately if UID is registered and a slot is available.
+        The reservation marks the slot as taken right away.
+    """
     global slots
     data = request.get_json()
     uid = data.get("uid")
@@ -182,11 +201,20 @@ def reserve():
     if uid not in registered_uids:
         return jsonify({"message": "Access Denied: Invalid UID"}), 403
 
-    reserved_uids.add(uid)
-    with open("reserved_data.json", "w") as file:
-        json.dump(list(reserved_uids), file)
+    # Check if UID is already reserved.
+    if uid in reserved_uids:
+        return jsonify({"message": "UID already reserved"})
 
-    return jsonify({"message": "Reservation Successful"})
+    # Check if a free slot is available.
+    if None in slots:
+        # Immediately assign the slot.
+        slots[slots.index(None)] = uid
+        reserved_uids.add(uid)
+        with open("reserved_data.json", "w") as file:
+            json.dump(list(reserved_uids), file)
+        return jsonify({"message": "Reservation Successful"})
+    else:
+        return jsonify({"message": "Parking Full"}), 400
 
 
 if __name__ == "__main__":
