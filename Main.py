@@ -54,10 +54,13 @@ def lcd_init():
     lcd_command(LCD_RETURNHOME)
     time.sleep(0.2)
 
-def update_lcd(message):
+def clear_lcd():
     lcd_command(LCD_CLEARDISPLAY)
     lcd_command(LCD_RETURNHOME)
     time.sleep(0.2)
+
+def update_lcd(message):
+    clear_lcd()
     if len(message) > 16:
         lcd_string(message[:16], 0)
         lcd_string(message[16:32], 1)
