@@ -7,6 +7,7 @@ from mfrc522 import SimpleMFRC522
 import smbus
 import pigpio
 import os
+from RPLCD.i2c import CharLCD
 
 # GPIO setup
 GPIO.setmode(GPIO.BCM)
@@ -22,9 +23,17 @@ SERVO_PIN = 22
 pi = pigpio.pi()
 pi.set_mode(SERVO_PIN, pigpio.OUTPUT)
 
-# LCD I2C Setup (Replace with actual LCD code)
-I2C_ADDR = 0x27
-bus = smbus.SMBus(1)
+# LCD I2C Setup
+# Adjust parameters as needed for your LCD (common parameters for a PCF8574 based 16x2 display)
+lcd = CharLCD(i2c_expander="PCF8574", address=0x27, port=1,
+              cols=16, rows=2, charmap="A02", auto_linebreaks=True)
+# Turn on the backlight (if supported by your hardware/backpack)
+lcd.backlight_enabled = True
+
+def update_lcd(message):
+    """Display messages on LCD with backlight on."""
+    lcd.clear()
+    lcd.write_string(message[:16])  # Display only first 16 characters
 
 # RFID Setup
 reader = SimpleMFRC522()
@@ -52,22 +61,15 @@ if os.path.exists("reserved_data.json"):
     with open("reserved_data.json", "r") as file:
         reserved_uids = set(json.load(file))
 
-
 def move_servo(angle):
-    """ Move servo (0° for closed, 90° for open) """
+    """Move servo (0° for closed, 90° for open)"""
     duty_cycle = (angle / 18.0) + 2.5
     pi.set_servo_pulsewidth(SERVO_PIN, duty_cycle * 1000)
     time.sleep(1)
     pi.set_servo_pulsewidth(SERVO_PIN, 0)
 
-
-def update_lcd(message):
-    """ Display messages on LCD """
-    print(f"LCD: {message}")  # Replace with actual LCD I2C commands
-
-
 def add_rfid():
-    """ Add RFID card when button is pressed """
+    """Add RFID card when button is pressed."""
     while True:
         if GPIO.input(BTN_ADD) == GPIO.LOW:
             print("Place RFID card to register...")
@@ -85,9 +87,8 @@ def add_rfid():
                 update_lcd("Card Already Exists")
             time.sleep(2)
 
-
 def remove_rfid():
-    """ Remove RFID card when button is pressed """
+    """Remove RFID card when button is pressed."""
     while True:
         if GPIO.input(BTN_REMOVE) == GPIO.LOW:
             print("Place RFID card to remove...")
@@ -108,9 +109,8 @@ def remove_rfid():
                 update_lcd("Card Not Found")
             time.sleep(2)
 
-
 def detect_entry():
-    """ Detect vehicle entry and authenticate via RFID """
+    """Detect vehicle entry and authenticate via RFID."""
     global slots
     while True:
         if GPIO.input(IR_ENTRY) == 0:
@@ -157,9 +157,8 @@ def detect_entry():
                 print("Access Denied!")
             time.sleep(1)
 
-
 def detect_exit():
-    """ Detect vehicle exit and free slot """
+    """Detect vehicle exit and free slot."""
     global slots
     while True:
         if GPIO.input(IR_EXIT) == 0:
@@ -176,7 +175,6 @@ def detect_exit():
                     break
             time.sleep(1)
 
-
 # Flask Web App
 app = Flask(__name__)
 
@@ -191,8 +189,8 @@ def status():
 
 @app.route("/reserve", methods=["POST"])
 def reserve():
-    """ Reserve a slot immediately if UID is registered and a slot is available.
-        The reservation marks the slot as taken right away.
+    """Reserve a slot immediately if UID is registered and a slot is available.
+       The reservation marks the slot as taken right away.
     """
     global slots
     data = request.get_json()
@@ -215,7 +213,6 @@ def reserve():
         return jsonify({"message": "Reservation Successful"})
     else:
         return jsonify({"message": "Parking Full"}), 400
-
 
 if __name__ == "__main__":
     threading.Thread(target=add_rfid, daemon=True).start()
