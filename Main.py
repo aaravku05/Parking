@@ -4,7 +4,6 @@ import json
 import threading
 from flask import Flask, render_template, request, jsonify
 from mfrc522 import SimpleMFRC522
-import smbus
 import pigpio
 import os
 from RPLCD.i2c import CharLCD
@@ -24,16 +23,14 @@ pi = pigpio.pi()
 pi.set_mode(SERVO_PIN, pigpio.OUTPUT)
 
 # LCD I2C Setup
-# Adjust parameters as needed for your LCD (common parameters for a PCF8574 based 16x2 display)
 lcd = CharLCD(i2c_expander="PCF8574", address=0x27, port=1,
               cols=16, rows=2, charmap="A02", auto_linebreaks=True)
-# Turn on the backlight (if supported by your hardware/backpack)
-lcd.backlight_enabled = True
+lcd.backlight_enabled = True  # Enable LCD backlight
 
 def update_lcd(message):
-    """Display messages on LCD with backlight on."""
+    """Display messages on LCD."""
     lcd.clear()
-    lcd.write_string(message[:16])  # Display only first 16 characters
+    lcd.write_string(message[:16])  # Limit to 16 characters
 
 # RFID Setup
 reader = SimpleMFRC522()
@@ -46,8 +43,7 @@ GPIO.setup(BTN_REMOVE, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
 # Parking Slots & Registered UIDs
 PARKING_SLOTS = 4
-# 'slots' is a list where each element is either None or the UID occupying that slot.
-slots = [None] * PARKING_SLOTS  
+slots = [None] * PARKING_SLOTS  # List to store UID occupying slots
 registered_uids = {}
 reserved_uids = set()
 
@@ -62,52 +58,54 @@ if os.path.exists("reserved_data.json"):
         reserved_uids = set(json.load(file))
 
 def move_servo(angle):
-    """Move servo (0° for closed, 90° for open)"""
-    duty_cycle = (angle / 18.0) + 2.5
-    pi.set_servo_pulsewidth(SERVO_PIN, duty_cycle * 1000)
+    """Move servo (0° for closed, 90° for open)."""
+    pulse_width = 500 + (angle / 90.0) * 2000  # Map 0° to 500us, 90° to 2500us
+    pi.set_servo_pulsewidth(SERVO_PIN, pulse_width)
     time.sleep(1)
     pi.set_servo_pulsewidth(SERVO_PIN, 0)
 
 def add_rfid():
     """Add RFID card when button is pressed."""
     while True:
-        if GPIO.input(BTN_ADD) == GPIO.LOW:
-            print("Place RFID card to register...")
-            update_lcd("Scan New Card")
-            uid, _ = reader.read()
-            uid = str(uid)
+        GPIO.wait_for_edge(BTN_ADD, GPIO.FALLING)
+        time.sleep(0.2)  # Debounce
+        print("Place RFID card to register...")
+        update_lcd("Scan New Card")
+        uid, _ = reader.read()
+        uid = str(uid)
 
-            if uid not in registered_uids:
-                registered_uids[uid] = True
-                with open("rfid_data.json", "w") as file:
-                    json.dump(registered_uids, file)
-                print(f"RFID {uid} added!")
-                update_lcd(f"Added: {uid}")
-            else:
-                update_lcd("Card Already Exists")
-            time.sleep(2)
+        if uid not in registered_uids:
+            registered_uids[uid] = True
+            with open("rfid_data.json", "w") as file:
+                json.dump(registered_uids, file)
+            print(f"RFID {uid} added!")
+            update_lcd(f"Added: {uid}")
+        else:
+            update_lcd("Card Already Exists")
+        time.sleep(2)
 
 def remove_rfid():
     """Remove RFID card when button is pressed."""
     while True:
-        if GPIO.input(BTN_REMOVE) == GPIO.LOW:
-            print("Place RFID card to remove...")
-            update_lcd("Scan Card to Remove")
-            uid, _ = reader.read()
-            uid = str(uid)
+        GPIO.wait_for_edge(BTN_REMOVE, GPIO.FALLING)
+        time.sleep(0.2)  # Debounce
+        print("Place RFID card to remove...")
+        update_lcd("Scan Card to Remove")
+        uid, _ = reader.read()
+        uid = str(uid)
 
-            if uid in registered_uids:
-                del registered_uids[uid]
-                reserved_uids.discard(uid)
-                with open("rfid_data.json", "w") as file:
-                    json.dump(registered_uids, file)
-                with open("reserved_data.json", "w") as file:
-                    json.dump(list(reserved_uids), file)
-                print(f"RFID {uid} removed!")
-                update_lcd(f"Removed: {uid}")
-            else:
-                update_lcd("Card Not Found")
-            time.sleep(2)
+        if uid in registered_uids:
+            del registered_uids[uid]
+            reserved_uids.discard(uid)
+            with open("rfid_data.json", "w") as file:
+                json.dump(registered_uids, file)
+            with open("reserved_data.json", "w") as file:
+                json.dump(list(reserved_uids), file)
+            print(f"RFID {uid} removed!")
+            update_lcd(f"Removed: {uid}")
+        else:
+            update_lcd("Card Not Found")
+        time.sleep(2)
 
 def detect_entry():
     """Detect vehicle entry and authenticate via RFID."""
@@ -120,59 +118,50 @@ def detect_entry():
             uid = str(uid)
 
             if uid in registered_uids:
-                if uid in reserved_uids:
-                    # If reserved, the slot should already be taken.
-                    if uid in slots:
-                        move_servo(90)
-                        time.sleep(3)
-                        move_servo(0)
-                        update_lcd("Entry Granted")
-                        print(f"Entry granted (reserved): {uid}")
-                    else:
-                        # Fallback: assign a slot if, for some reason, it's not marked.
-                        if None in slots:
-                            slots[slots.index(None)] = uid
-                            move_servo(90)
-                            time.sleep(3)
-                            move_servo(0)
-                            update_lcd("Entry Granted")
-                            print(f"Entry granted (fallback reserved): {uid}")
-                        else:
-                            update_lcd("Parking Full!")
-                            print("Parking Full!")
+                if None in slots:
+                    slots[slots.index(None)] = uid
+                    move_servo(90)
+                    time.sleep(3)
+                    move_servo(0)
+                    update_lcd("Entry Granted")
+                    print(f"Entry granted: {uid}")
                 else:
-                    # Walk-in users: assign a slot at entry time.
-                    if None in slots:
-                        slots[slots.index(None)] = uid
-                        move_servo(90)
-                        time.sleep(3)
-                        move_servo(0)
-                        update_lcd("Entry Granted")
-                        print(f"Entry granted (walk-in): {uid}")
-                    else:
-                        update_lcd("Parking Full!")
-                        print("Parking Full!")
+                    update_lcd("Parking Full!")
+                    print("Parking Full!")
             else:
                 update_lcd("Access Denied")
                 print("Access Denied!")
             time.sleep(1)
 
 def detect_exit():
-    """Detect vehicle exit and free slot."""
-    global slots
+    """Detect vehicle exit with RFID verification."""
+    global slots, reserved_uids
+
     while True:
         if GPIO.input(IR_EXIT) == 0:
             print("Vehicle detected at exit...")
-            # Free the first occupied slot encountered.
-            for i in range(len(slots)):
-                if slots[i] is not None:
-                    slots[i] = None
-                    move_servo(90)
-                    time.sleep(3)
-                    move_servo(0)
-                    update_lcd("Exit Granted")
-                    print("Vehicle exited.")
-                    break
+            update_lcd("Scan RFID to Exit")
+            uid, _ = reader.read()
+            uid = str(uid)
+
+            if uid in slots:
+                slot_index = slots.index(uid)
+                slots[slot_index] = None  # Free the slot
+                
+                if uid in reserved_uids:
+                    reserved_uids.remove(uid)
+                    with open("reserved_data.json", "w") as file:
+                        json.dump(list(reserved_uids), file)
+
+                move_servo(90)
+                time.sleep(3)
+                move_servo(0)
+                update_lcd("Exit Granted")
+                print(f"Vehicle with UID {uid} exited.")
+            else:
+                update_lcd("Unauthorized Exit!")
+                print(f"Unauthorized exit attempt by UID {uid}")
+            
             time.sleep(1)
 
 # Flask Web App
@@ -189,9 +178,7 @@ def status():
 
 @app.route("/reserve", methods=["POST"])
 def reserve():
-    """Reserve a slot immediately if UID is registered and a slot is available.
-       The reservation marks the slot as taken right away.
-    """
+    """Reserve a slot if available and UID is registered."""
     global slots
     data = request.get_json()
     uid = data.get("uid")
@@ -199,13 +186,10 @@ def reserve():
     if uid not in registered_uids:
         return jsonify({"message": "Access Denied: Invalid UID"}), 403
 
-    # Check if UID is already reserved.
     if uid in reserved_uids:
         return jsonify({"message": "UID already reserved"})
 
-    # Check if a free slot is available.
     if None in slots:
-        # Immediately assign the slot.
         slots[slots.index(None)] = uid
         reserved_uids.add(uid)
         with open("reserved_data.json", "w") as file:
