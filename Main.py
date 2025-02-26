@@ -24,7 +24,7 @@ LCD_5x8DOTS = 0x00
 LCD_DISPLAYON = 0x04
 bus = smbus2.SMBus(1)
 
-def lcd_write(data, mode=0):
+def lcd-write(data, mode=0):
     high_nibble = mode | (data & 0xF0) | BACKLIGHT
     low_nibble = mode | ((data << 4) & 0xF0) | BACKLIGHT
     bus.write_byte(I2C_ADDR, high_nibble | ENABLE)
